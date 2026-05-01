@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console d'Urgence Pro</title>
+    <style>
+        body { 
+            background: #111; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-x: hidden;
+            transition: background 0.1s;
+        }
+        
+        /* Styles des gyrophares */
+        .gyro-fr { animation: flash-blue 0.6s infinite; }
+        .gyro-us { animation: flash-us 0.4s infinite; }
+
+        @keyframes flash-blue {
+            0%, 100% { background-color: #111; }
+            50% { background-color: #0044ff; }
+        }
+        @keyframes flash-us {
+            0%, 45% { background-color: #ff0000; }
+            50%, 95% { background-color: #0044ff; }
+            46%, 49%, 96%, 100% { background-color: #111; }
+        }
+
+        .main-nav { margin-bottom: 20px; z-index: 10; }
+        .btn-mode { padding: 15px 25px; font-size: 1rem; cursor: pointer; border: none; margin: 5px; border-radius: 5px; font-weight: bold; text-transform: uppercase; }
+        .btn-police { background: #0044ff; color: white; }
+        .btn-secours { background: #cc0000; color: white; }
+        
+        .panel { display: none; background: rgba(50, 50, 50, 0.9); padding: 20px; border-radius: 15px; width: 90%; max-width: 500px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 10; }
+        .active { display: block; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+        button.siren { padding: 15px; border: 2px solid #555; background: #222; color: #fff; cursor: pointer; border-radius: 8px; font-weight: bold; }
+        button.siren.playing { border-color: #fff; box-shadow: 0 0 10px #fff; }
+        
+        .btn-stop { width: 100%; padding: 15px; background: #ffae00; color: black; font-weight: bold; border: none; border-radius: 8px; margin-top: 15px; cursor: pointer; font-size: 1.1rem; }
+
+        .mic-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid #666; }
+        .btn-mic { width: 100%; padding: 15px; background: #444; border: none; color: white; cursor: pointer; border-radius: 8px; margin-bottom: 10px; }
+        .btn-mic:active { background: #00ff00; color: black; }
+    </style>
+</head>
+<body id="bg-body">
+
+    <div class="main-nav">
+        <button class="btn-mode btn-police" onclick="showPanel('police')">POLICE</button>
+        <button class="btn-mode btn-secours" onclick="showPanel('secours')">AMB / POMPIERS</button>
+    </div>
+
+    <!-- PANNEAU POLICE -->
+    <div id="panel-police" class="panel">
+        <h2>🚨 UNITÉ POLICE</h2>
+        <div class="grid">
+            <button class="siren" onclick="toggleSiren(this, 'police.mp3', 'fr')">Deux-tons (FR)</button>
+            <button class="siren" onclick="toggleSiren(this, 'sirene_us.wav', 'us')">Sirène US</button>
+            <button class="siren" onclick="toggleSiren(this, 'variees_us.mp3', 'us')">Sirène variée</button>
+            <button class="siren" onclick="toggleSiren(this, 'arrivee_us.mp3', 'us')">Arrivée US</button>
+        </div>
+        <button class="btn-stop" onclick="stopAll()">🛑 STOPPER LES SIRÈNES</button>
+        
+        <div class="mic-section">
+            <button class="btn-mic" onmousedown="startMic('mega')" onmouseup="stopMic()">🎤 MÉGAPHONE</button>
+            <button class="btn-mic" onmousedown="startMic('radio')" onmouseup="stopMic()">📻 RADIO POLICE</button>
+        </div>
+    </div>
+
+    <!-- PANNEAU SECOURS -->
+    <div id="panel-secours" class="panel">
+        <h2>🚑 SECOURS / POMPIERS</h2>
+        <div class="grid">
+            <button class="siren" onclick="toggleSiren(this, 'deux_tons.wav', 'fr')">Deux-tons (FR)</button>
+            <button class="siren" onclick="toggleSiren(this, 'trois_tons.wav', 'fr')">Trois-tons (FR)</button>
+            <button class="siren" onclick="toggleSiren(this, 'sirene_us.wav', 'us')">Sirène US</button>
+        </div>
+        <button class="btn-stop" onclick="stopAll()">🛑 STOPPER LES SIRÈNES</button>
+
+        <div class="mic-section">
+            <button class="btn-mic" onmousedown="startMic('mega')" onmouseup="stopMic()">🎤 MÉGAPHONE</button>
+        </div>
+    </div>
+
+    <script>
+        let currentAudio = null;
+        let mediaRecorder;
+        let audioChunks = [];
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const body = document.getElementById('bg-body');
+
+        function showPanel(id) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('panel-' + id).classList.add('active');
+            stopAll();
+        }
+
+        function toggleSiren(btn, file, type) {
+            if (currentAudio && currentAudio.src.includes(file)) {
+                stopAll();
+            } else {
+                stopAll();
+                currentAudio = new Audio('sounds/' + file);
+                currentAudio.loop = true;
+                currentAudio.play();
+                
+                btn.classList.add('playing');
+                
+                // Activer l'effet visuel
+                if (type === 'fr') body.className = 'gyro-fr';
+                else if (type === 'us') body.className = 'gyro-us';
+            }
+        }
+
+        function stopAll() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            body.className = ''; // Arrête le flash
+            document.querySelectorAll('.siren').forEach(b => b.classList.remove('playing'));
+        }
+
+        // --- MICROPHONE LOGIC ---
+        async function startMic(mode) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    playWithEffect(audioBuffer, mode);
+                };
+                mediaRecorder.start();
+            } catch (err) {
+                alert("Microphone non accessible. Vérifie les autorisations.");
+            }
+        }
+
+        function stopMic() {
+            if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+        }
+
+        function playWithEffect(buffer, mode) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const gainNode = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            if (mode === 'radio') {
+                filter.type = "bandpass";
+                filter.frequency.value = 1200; 
+                gainNode.gain.value = 4.0;
+            } else {
+                filter.type = "highpass";
+                filter.frequency.value = 500;
+                gainNode.gain.value = 6.0; 
+            }
+
+            source.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            source.start();
+        }
+    </script>
+</body>
+</html>
